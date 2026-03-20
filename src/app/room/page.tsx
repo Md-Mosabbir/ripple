@@ -14,16 +14,17 @@ import { RGBELoader } from "three/examples/jsm/Addons.js";
 import { Petals } from "./petals";
 import { MorphingText } from "./components/morphing-text";
 import { Architecture } from "./components/architecture";
+import SceneEffects from "./components/scene-effects";
 
 // --- 1. SIMULATION SHADER ---
 const SimulationShader = {
   uniforms: {
     tDiffuse: { value: null },
-    delta: { value: 1.1 },
+    delta: { value: 1.0 }, // [Range 0.5 - 1.0] Lower is more stable
     resolution: { value: new THREE.Vector2(512, 512) },
     mousePos: { value: new THREE.Vector2(0, 0) },
     lastMousePos: { value: new THREE.Vector2(0, 0) },
-    uDamping: { value: 0.96 },
+    uDamping: { value: 0.96 }, // [Range 0.90 - 0.99] Lower = thicker liquid
     uTime: { value: 0 },
   },
   vertexShader: `
@@ -43,6 +44,12 @@ const SimulationShader = {
     varying vec2 vUv;
 
     void main() {
+      // --- STABILITY TUNING ---
+      float waveSpeed = 0.25;    // [Range 0.1 - 0.5] How fast waves travel
+      float mouseSize = 0.015;   // [Range 0.01 - 0.1] Size of the "brush"
+      float mouseStrength = 0.8; // [Range 0.1 - 1.0] Max height of ripples
+      // ------------------------
+
       vec2 texel = 1.0 / resolution;
       vec4 data = texture2D(tDiffuse, vUv);
       float pressure = data.x;
@@ -53,18 +60,26 @@ const SimulationShader = {
       float p_up = texture2D(tDiffuse, vUv + vec2(0.0, texel.y)).x;
       float p_down = texture2D(tDiffuse, vUv + vec2(0.0, -texel.y)).x;
       
-      pVel += delta * (-2.0 * pressure + p_right + p_left) / 4.0;
-      pVel += delta * (-2.0 * pressure + p_up + p_down) / 4.0;
-      pressure += delta * pVel;
+      // Discrete Wave Equation
+      float acceleration = (p_right + p_left + p_up + p_down - 4.0 * pressure) * waveSpeed;
+      pVel += acceleration * delta;
+      pressure += pVel * delta;
       
-      pVel -= 0.005 * delta * pressure; 
+      // Apply damping
       pVel *= uDamping;
       pressure *= uDamping;
 
+      // --- STABLE MOUSE INJECTION ---
+      float mouseDist = distance(vUv, mousePos);
       float mouseSpeed = distance(mousePos, lastMousePos);
-      if (distance(vUv, mousePos) < 0.035) { 
-          pressure += min(mouseSpeed * 25.0, 0.8); 
+      
+      if (mouseDist < mouseSize) {
+        // Instead of += (which explodes), we use max() to "cap" the energy
+        float impact = min(mouseSpeed * 15.0, mouseStrength);
+        pressure = max(pressure, impact); 
       }
+
+      // Store physics data: Red=Pressure, Green=Velocity, Blue/Alpha=Normals
       gl_FragColor = vec4(pressure, pVel, (p_right - p_left), (p_up - p_down));
     }
   `,
@@ -75,10 +90,10 @@ const WaterShader = {
   uniforms: {
     tSimulation: { value: null },
     tRefraction: { value: null },
-    uRefractionStrength: { value: 0.2 },
-    uGlowSize: { value: 2.5 },
+    uRefractionStrength: { value: 0.2 }, // [Range 0.0 - 1.0] How much waves distort the BG
+    uGlowSize: { value: 2.5 },           // [Range 1.0 - 5.0] Sharpness of pink glow
     uTime: { value: 0 },
-    uWaveSpeed: { value: 0.5 },
+    uWaveSpeed: { value: 0.5 },          // [Range 0.1 - 2.0] Speed of background ripples
   },
   vertexShader: `
     varying vec2 vUv;
@@ -89,8 +104,10 @@ const WaterShader = {
     void main() {
       vUv = uv;
       vec3 pos = position;
+      
+      // Pull height from the simulation
       float ripple = texture2D(tSimulation, uv).r;
-      pos.z += ripple * 1.5;
+      pos.z += ripple * 1.2; // Vertical displacement
       
       vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
       vWorldPos = worldPosition.xyz;
@@ -110,6 +127,7 @@ const WaterShader = {
     uniform float uTime;
     uniform float uWaveSpeed;
 
+    // Background procedural wave math
     vec2 wavedx(vec2 position, vec2 direction, float frequency, float timeshift) {
       float x = dot(direction, position) * frequency + timeshift;
       float wave = exp(sin(x) - 1.0);
@@ -124,41 +142,50 @@ const WaterShader = {
       float weight = 1.0;
       float sumOfValues = 0.0;
       float sumOfWeights = 0.0;
-      for(int i=0; i < 8; i++) {
+      for(int i=0; i < 6; i++) { // Slightly optimized from 8 to 6 iterations
         vec2 p = vec2(sin(iter), cos(iter));
         vec2 res = wavedx(position, p, frequency, uTime * uWaveSpeed * timeMultiplier);
-        position += p * res.y * weight * 0.38;
+        position += p * res.y * weight * 0.3;
         sumOfValues += res.x * weight;
         sumOfWeights += weight;
-        weight = mix(weight, 0.0, 0.2);
+        weight *= 0.82;
         frequency *= 1.18;
         timeMultiplier *= 1.07;
-        iter += 1232.399;
+        iter += 12.39;
       }
       return sumOfValues / sumOfWeights;
     }
 
     void main() {
-      float octaveHeight = getwaves(vWorldPos.xz * 0.2);
+      // 1. Get Simulation data
       vec4 sim = texture2D(tSimulation, vUv);
       float pressure = sim.x;
       vec2 physicsDistortion = sim.zw;
 
+      // 2. Get Background Procedural Waves
+      float octaveHeight = getwaves(vWorldPos.xz * 0.2);
+
+      // 3. Combine distortions for refraction
       vec2 screenUv = (vScreenPos.xy / vScreenPos.w) * 0.5 + 0.5;
-      vec2 finalDistortion = physicsDistortion + (octaveHeight * 0.1); 
+      vec2 finalDistortion = physicsDistortion * 0.5 + (octaveHeight * 0.05); 
       vec3 refraction = texture2D(tRefraction, screenUv + finalDistortion * uRefractionStrength).rgb;
 
-      vec3 pinkBase = mix(vec3(1.0, 0.95, 0.92), vec3(0.95, 0.85, 0.82), vUv.y);
-      vec3 finalColor = mix(refraction, pinkBase, 0.4);
+      // 4. Color Layers
+      vec3 pinkBase = mix(vec3(1.0, 0.92, 0.95), vec3(0.98, 0.80, 0.85), vUv.y);
+      vec3 finalColor = mix(refraction, pinkBase, 0.35);
 
-      float peak = pow(max(0.0, octaveHeight), 1.0);
-      vec3 octaveHighlight = vec3(1.0, 0.9, 0.95) * peak * 0.5;
+      // 5. Highlights and Glow
+      float peak = pow(max(0.0, octaveHeight), 2.0);
+      vec3 octaveHighlight = vec3(1.0, 0.95, 1.0) * peak * 0.3;
       
-      vec3 mouseHighlight = vec3(1.0, 0.98, 1.0) * pow(max(0.0, pressure), 2.0) * 3.0;
-      vec3 pinkGlow = vec3(1.0, 0.4, 0.8) * pow(max(0.0, pressure), uGlowSize) * 2.0;
+      // The pressure from the mouse creates these two glows:
+      vec3 mouseWhite = vec3(1.0, 1.0, 1.0) * pow(max(0.0, pressure), 2.0) * 2.0;
+      vec3 pinkGlow = vec3(1.0, 0.3, 0.6) * pow(max(0.0, pressure), uGlowSize) * 2.5;
       
-      finalColor += mouseHighlight + pinkGlow + octaveHighlight;
-      float edgeMask = smoothstep(0.5, 0.49, distance(vUv, vec2(0.5))); 
+      finalColor += mouseWhite + pinkGlow + octaveHighlight;
+
+      // 6. Circular Mask
+      float edgeMask = smoothstep(0.5, 0.48, distance(vUv, vec2(0.5))); 
       gl_FragColor = vec4(finalColor, edgeMask);
     }
   `,
@@ -421,6 +448,7 @@ export default function RoomPage() {
       <Leva collapsed={false} />
       <Canvas dpr={[1, 2]}>
         <Scene />
+        <SceneEffects />
       </Canvas>
     </div>
   );
