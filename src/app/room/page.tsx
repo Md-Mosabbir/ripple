@@ -1,13 +1,19 @@
 "use client";
 import { useMemo, useRef, Suspense } from "react";
-import { Canvas, useFrame, useThree, createPortal, useLoader } from "@react-three/fiber";
-import { useFBO, Environment, OrbitControls, ContactShadows } from "@react-three/drei";
+import { Canvas, useFrame, createPortal, useLoader } from "@react-three/fiber";
+import {
+  useFBO,
+  Environment,
+  OrbitControls,
+  ContactShadows,
+} from "@react-three/drei";
 import { useControls, Leva } from "leva";
 import * as THREE from "three";
-import { CameraController, Architecture, SceneText } from "./components/SceneElements";
+import { CameraController } from "./components/SceneElements";
 import { RGBELoader } from "three/examples/jsm/Addons.js";
 import { Petals } from "./petals";
 import { MorphingText } from "./components/morphing-text";
+import { Architecture } from "./components/architecture";
 
 // --- 1. SIMULATION SHADER ---
 const SimulationShader = {
@@ -18,7 +24,7 @@ const SimulationShader = {
     mousePos: { value: new THREE.Vector2(0, 0) },
     lastMousePos: { value: new THREE.Vector2(0, 0) },
     uDamping: { value: 0.96 },
-    uTime: { value: 0 }
+    uTime: { value: 0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -72,7 +78,7 @@ const WaterShader = {
     uRefractionStrength: { value: 0.2 },
     uGlowSize: { value: 2.5 },
     uTime: { value: 0 },
-    uWaveSpeed: { value: 0.5 }
+    uWaveSpeed: { value: 0.5 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -155,24 +161,26 @@ const WaterShader = {
       float edgeMask = smoothstep(0.5, 0.49, distance(vUv, vec2(0.5))); 
       gl_FragColor = vec4(finalColor, edgeMask);
     }
-  `
+  `,
 };
 
 function SkyDome({ layer = 0 }) {
   const texture = useLoader(RGBELoader, "/pink_sunrise_4k.hdr");
-  texture.mapping = THREE.EquirectangularReflectionMapping;
 
   const { rotationX, rotationY, rotationZ } = useControls("Sky Rotation", {
     rotationX: { value: 1.72, min: -Math.PI, max: Math.PI, step: 0.01 },
-    rotationY: { value: 2.80, min: -Math.PI, max: Math.PI, step: 0.01 },
+    rotationY: { value: 2.8, min: -Math.PI, max: Math.PI, step: 0.01 },
     rotationZ: { value: -1.1, min: -Math.PI, max: Math.PI, step: 0.01 },
   });
 
   return (
-    <mesh rotation={[rotationX, rotationY, rotationZ]} onUpdate={(o) => {
-      o.layers.set(layer);
-      if (layer === 2) o.layers.enable(2);
-    }}>
+    <mesh
+      rotation={[rotationX, rotationY, rotationZ]}
+      onUpdate={(o) => {
+        o.layers.set(layer);
+        if (layer === 2) o.layers.enable(2);
+      }}
+    >
       <sphereGeometry args={[500, 64, 32]} />
       <meshBasicMaterial map={texture} side={THREE.BackSide} fog={false} />
     </mesh>
@@ -186,12 +194,15 @@ const Scene = () => {
   const uvMouse = useRef(new THREE.Vector2(0, 0));
   const lastUvMouse = useRef(new THREE.Vector2(0, 0));
 
-  const { damping, refractionStrength, glowSize, waveSpeed } = useControls("Water Style", {
-    damping: { value: 0.97, min: 0.9, max: 0.99 },
-    refractionStrength: { value: 0.25, min: 0, max: 1.0 },
-    glowSize: { value: 2.5, min: 1.0, max: 5.0 },
-    waveSpeed: { value: 0.4, min: 0, max: 2.0 }
-  });
+  const { damping, refractionStrength, glowSize, waveSpeed } = useControls(
+    "Water Style",
+    {
+      damping: { value: 0.97, min: 0.9, max: 0.99 },
+      refractionStrength: { value: 0.25, min: 0, max: 1.0 },
+      glowSize: { value: 2.5, min: 1.0, max: 5.0 },
+      waveSpeed: { value: 0.4, min: 0, max: 2.0 },
+    },
+  );
 
   const { waterY } = useControls("Layout", {
     waterY: { value: -0.9, min: -5, max: 5 },
@@ -205,7 +216,7 @@ const Scene = () => {
   const { textPos, textRot, fontSize } = useControls("Scene Text", {
     textPos: { value: [42.1, 9.9, -32.2], step: 0.1, min: -200, max: 200 },
     textRot: { value: [0, 2.23, 0], step: 0.01, min: -Math.PI, max: Math.PI },
-    fontSize: { value: 4.1, min: 1, max: 20 }
+    fontSize: { value: 4.1, min: 1, max: 20 },
   });
 
   const fboA = useFBO(512, 512, { type: THREE.FloatType });
@@ -213,7 +224,10 @@ const Scene = () => {
   const refractionFbo = useFBO();
   const simTargets = useRef({ read: fboA, write: fboB });
   const simScene = useMemo(() => new THREE.Scene(), []);
-  const orthoCam = useMemo(() => new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), []);
+  const orthoCam = useMemo(
+    () => new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
+    [],
+  );
 
   useFrame((state) => {
     const { scene, clock, mouse, camera, gl } = state;
@@ -229,12 +243,12 @@ const Scene = () => {
     meshGroup.current.rotation.y = THREE.MathUtils.lerp(
       meshGroup.current.rotation.y,
       targetY,
-      lerpSpeed
+      lerpSpeed,
     );
     meshGroup.current.rotation.z = THREE.MathUtils.lerp(
       meshGroup.current.rotation.x,
       targetX,
-      lerpSpeed
+      lerpSpeed,
     );
 
     // --- 2. REFRACTION PASS ---
@@ -262,7 +276,8 @@ const Scene = () => {
     gl.setRenderTarget(null);
 
     // --- 4. UPDATE WATER ---
-    waterMat.current.uniforms.tSimulation.value = simTargets.current.read.texture;
+    waterMat.current.uniforms.tSimulation.value =
+      simTargets.current.read.texture;
     waterMat.current.uniforms.tRefraction.value = refractionFbo.texture;
     waterMat.current.uniforms.uRefractionStrength.value = refractionStrength;
     waterMat.current.uniforms.uGlowSize.value = glowSize;
@@ -272,26 +287,27 @@ const Scene = () => {
     lastUvMouse.current.copy(uvMouse.current);
   });
 
-  const { camX, camY, camZ, camRX, camRY, camRZ, camFov, autoLookAt } = useControls("Camera Settings", {
-    autoLookAt: { value: true },
-    camX: { value: 86, min: -300, max: 300, step: 1 },
-    camY: { value: 12, min: -200, max: 200, step: 1 },
-    camZ: { value: -64, min: -300, max: 300, step: 1 },
-    // Manual rotation controls (used when autoLookAt is off)
-    camRX: { value: 0, min: -Math.PI, max: Math.PI, step: 0.01 },
-    camRY: { value: 0, min: -Math.PI, max: Math.PI, step: 0.01 },
-    camRZ: { value: 0, min: -Math.PI, max: Math.PI, step: 0.01 },
-    camFov: { value: 35, min: 10, max: 120, step: 1 },
-  });
+  const { camX, camY, camZ, camRX, camRY, camRZ, camFov, autoLookAt } =
+    useControls("Camera Settings", {
+      autoLookAt: { value: true },
+      camX: { value: 86, min: -300, max: 300, step: 1 },
+      camY: { value: 12, min: -200, max: 200, step: 1 },
+      camZ: { value: -64, min: -300, max: 300, step: 1 },
+      // Manual rotation controls (used when autoLookAt is off)
+      camRX: { value: 0, min: -Math.PI, max: Math.PI, step: 0.01 },
+      camRY: { value: 0, min: -Math.PI, max: Math.PI, step: 0.01 },
+      camRZ: { value: 0, min: -Math.PI, max: Math.PI, step: 0.01 },
+      camFov: { value: 35, min: 10, max: 120, step: 1 },
+    });
 
   const { sunIntensity, sunColor, sunPos } = useControls("Sunny Lighting", {
-    sunIntensity: { value: 2.5, min: 0, max: 10 },
+    sunIntensity: { value: 4.5, min: 0, max: 10 },
     sunColor: "#ffdcb5",
     sunPos: { value: [200, -112, -100], step: 1 },
   });
   const { fogColor, fogDensity } = useControls("Environment Fog", {
-    fogColor: "#f5ebeb", // Match your page background or sky pink
-    fogDensity: { value: 0.002, min: 0, max: 0.01, step: 0.0001 },
+    fogColor: "#f2d6b2", // Match your page background or sky pink
+    fogDensity: { value: 0.01, min: 0, max: 0.0001, step: 0.0001 },
   });
 
   return (
@@ -317,10 +333,8 @@ const Scene = () => {
           <planeGeometry args={[2, 2]} />
           <shaderMaterial ref={simMat} {...SimulationShader} />
         </mesh>,
-        simScene
+        simScene,
       )}
-
-
 
       <Suspense fallback={null}>
         <group ref={meshGroup}>
@@ -332,7 +346,11 @@ const Scene = () => {
 
           <Architecture />
           <Petals count={150} />
-          <Architecture position={[0, waterY, 0]} scale={[1, -1, 1]} layer={2} />
+          <Architecture
+            position={[0, waterY, 0]}
+            scale={[1, -1, 1]}
+            layer={2}
+          />
 
           {/* 1. THE MAIN TEXT (LAYER 0) */}
           <MorphingText
@@ -351,12 +369,19 @@ const Scene = () => {
             layer={2}
           />
 
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, waterY, 0]}
-            onPointerMove={(e) => e.uv && uvMouse.current.copy(e.uv)}>
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, waterY, 0]}
+            onPointerMove={(e) => e.uv && uvMouse.current.copy(e.uv)}
+          >
             <planeGeometry args={[200, 200, 300, 300]} />
-            <shaderMaterial ref={waterMat} {...WaterShader} transparent={true} side={THREE.DoubleSide} />
+            <shaderMaterial
+              ref={waterMat}
+              {...WaterShader}
+              transparent={true}
+              side={THREE.DoubleSide}
+            />
           </mesh>
-
         </group>
       </Suspense>
 
@@ -372,11 +397,11 @@ const Scene = () => {
         castShadow
         shadow-mapSize={[2048, 2048]}
       >
-        <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100, 0.5, 500]} />
+        <orthographicCamera
+          attach="shadow-camera"
+          args={[-100, 100, 100, -100, 0.5, 500]}
+        />
       </directionalLight>
-
-
-
 
       <ContactShadows
         position={[0, waterY + 0.01, 0]}
@@ -387,7 +412,6 @@ const Scene = () => {
         color="#4b0000" // Dark reddish-brown shadows look better with pink
       />
     </>
-
   );
 };
 

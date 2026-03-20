@@ -3,6 +3,7 @@ import { useRef, useState, useEffect } from "react";
 import { useGLTF, Sampler, shaderMaterial } from "@react-three/drei";
 import { useFrame, extend } from "@react-three/fiber";
 
+import { GLTF } from "three-stdlib";
 const PinkGrassMaterial = shaderMaterial(
   {
     uTime: 0,
@@ -132,22 +133,32 @@ extend({ PinkGrassMaterial });
 
 export { PinkGrassMaterial };
 
-// --- 2. THE COMPONENT ---
+interface PinkGrassProps {
+  targetMesh: React.MutableRefObject<THREE.Mesh>;
+  count?: number;
+  scaleVar?: number;
+  onUpdate?: (o: THREE.Object3D) => void; // Added this
+}
 export function PinkGrass({
   targetMesh,
   count = 5000,
   scaleVar = 0.5,
-}: {
-  targetMesh: any;
-  count?: number;
-  scaleVar?: number;
-}) {
+}: PinkGrassProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<any>(null!);
   const [isReady, setIsReady] = useState(false);
 
+  type GrassGLTF = GLTF & {
+    nodes: {
+      Grass: THREE.Mesh;
+    };
+    materials: {
+      Mat_Grass: THREE.Material;
+    };
+  };
+
   // 1. Load the grass geometry
-  const { nodes } = useGLTF("/simple_grass.glb") as any;
+  const { nodes } = useGLTF("/simple_grass.glb") as unknown as GrassGLTF;
 
   // 2. FIX: Force the sampler to "Wake Up" once the targetMesh is truly attached to the DOM
   useEffect(() => {
