@@ -124,7 +124,7 @@ export function PinkGrass({ targetMesh, count = 8000, scaleVar = 0.4 }: any) {
       }}
     >
       <instancedMesh ref={meshRef} args={[nodes.Grass.geometry, null, count]}>
-        <pinkGrassMaterial ref={materialRef} transparent side={THREE.FrontSide} />
+        <pinkGrassMaterial ref={materialRef} transparent={false} depthWrite={true} side={THREE.FrontSide} />
       </instancedMesh>
     </Sampler>
   );
