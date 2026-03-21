@@ -26,7 +26,7 @@ export default function SceneEffects() {
     enableNoise,
   } = useControls("✨ Post FX", {
     // 🌸 BLOOM (SUBTLE!!)
-    enableBloom: true,
+    enableBloom: false,
     bloomIntensity: { value: 0.5, min: 0, max: 1.5, step: 0.01 },
     bloomThreshold: { value: 0.6, min: 0, max: 1, step: 0.01 },
     bloomSmoothing: { value: 0.9, min: 0, max: 1, step: 0.01 },

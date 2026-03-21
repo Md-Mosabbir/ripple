@@ -49,7 +49,7 @@ export function Architecture({ layer = 0, ...props }: any) {
 
       <PinkGrass
         targetMesh={mountainRef}
-        count={6000}
+        count={9000}
         scaleVar={1.0}
         onUpdate={handleUpdate}
       />
