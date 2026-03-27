@@ -270,7 +270,7 @@ const WaterScene = () => {
           anchorY="middle"
           position={[0, 0, 0]}
         >
-          Creating the{"\n"}unexpected
+          Keep going{"\n"}Never give up
           <shaderMaterial
             ref={textMat}
             {...MorphingTextShader}
